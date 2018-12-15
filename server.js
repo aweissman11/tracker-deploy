@@ -11,8 +11,10 @@ app.use(cors());
 
 app.set('port', process.env.PORT || 3000)
 
+app.use(express.static('./build'))
+
 app.post('/api/v1/users', (request, response) => {
-  const { user } = request.body
+  const user = request.body
   let missingProperties = [];
 
   for (let requiredProperty of ['email', 'password']) {
@@ -29,27 +31,27 @@ app.post('/api/v1/users', (request, response) => {
   }
 
   database('users')
-    .select(user.email, 'email')
+    .where('email', user.email)
+    .select()
     .then(databaseUser => {
-      if (!databaseUser) {
+      if (!databaseUser[0]) {
         return response.status(404).json({ error: `User with email ${user.email} does not exist`})
-      } else if (user.password !== databaseUser.password) {
+      } else if (user.password != databaseUser[0].password) {
         return response.status(400).json({ error: `Password is incorrect`})
       } else {
-        return response.status(200).json({ id: user.id, name: user.name, email: user.email })
+        return response.status(200).json({ id: databaseUser[0].id, name: databaseUser[0].name, email: databaseUser[0].email })
       }
     })
     .catch( error => {
+      console.log('error');
       return response.status(500).json(error.message)
       
     })
-
 })
 
 app.post('/api/v1/users/new', (request, response) => {
   const user = request.body;
   let missingProperties = [];
-
   for (let requiredProperty of ['name', 'email', 'password']) {
     if (user[requiredProperty] === undefined) {
       missingProperties = [...missingProperties, requiredProperty];
@@ -76,7 +78,7 @@ app.post('/api/v1/users/favorites/new', (request, response) => {
   let missingProperties = [];
 
   for (let requiredProperty of ['movie_id', 'user_id', 'title', 'poster_path', 'release_date', 'vote_average', 'overview']) {
-    if (user[requiredProperty] === undefined) {
+    if (favorite[requiredProperty] === undefined) {
       missingProperties = [...missingProperties, requiredProperty];
     }
   }
@@ -90,8 +92,8 @@ app.post('/api/v1/users/favorites/new', (request, response) => {
 
   database('favorites')
     .insert(favorite, 'id')
-    .then(userIds => {
-      response.status(201).json(favorite);
+    .then(favoriteIds => {
+      return response.status(201).json(favorite);
     })
     .catch(error => ({error: error.message}));
 });
@@ -105,13 +107,13 @@ app.delete('/api/v1/users/:user_id/favorites/:movie_id', (request, response) => 
     .then(favorite => {
       if (favorite > 0) {
         response
-          .status(204)
-          .json({message: `favorite ${request.params.id} deleted`});
+          .status(201)
+          .json({message: `favorite ${request.params.movie_id} deleted`});
       } else if (favorite > 1) {
         response.status(500).json(error.message)
       } else {
         response.status(404).json({
-          error: `No favorite with id ${request.params.id} exists`,
+          error: `No favorite with id ${request.params.movie_id} exists`,
         });
       }
     })
@@ -130,8 +132,6 @@ app.get('/api/v1/users/:user_id/favorites', (request, response) => {
         response.status(200).json([])
         return;
       }
-
-
       response.status(200).json(favorites);
     })
     .catch(error => {
